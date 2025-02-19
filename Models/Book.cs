@@ -1,4 +1,4 @@
-﻿namespace BookManagementAPI
+﻿namespace BookManagementAPI.Models
 {
     public class Book
     {
