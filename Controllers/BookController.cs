@@ -12,7 +12,7 @@ namespace BookManagementAPI.Controllers
         private readonly BookDbContext _context = context;
 
         [HttpGet]
-        public async Task<ActionResult<List<BookDto>>> GetBooks()
+        public async Task<ActionResult<List<BookDto>>> GetBooks(int pageNumber, int pageSize)
         {
             var books = await _context.Books.ToListAsync();
 
@@ -24,7 +24,23 @@ namespace BookManagementAPI.Controllers
                 BookViews = b.BookViews
             }).ToList();
 
-            return Ok(booksDto.OrderByDescending(b => b.PopularityScore).Select(b => b.Title));
+            int totalBooks = booksDto.Count;
+
+            List<BookDto> paginatedBooks = booksDto.OrderByDescending(b => b.Title).Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            var response = new
+            {
+                TotalBooks = totalBooks,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling((double)totalBooks / pageSize),
+                Books = paginatedBooks.Select(b => b.Title)
+            };
+
+            //return Ok(booksDto.OrderByDescending(b => b.PopularityScore).Select(b => b.Title));
+            return Ok(response);
         }
 
         [HttpGet]
