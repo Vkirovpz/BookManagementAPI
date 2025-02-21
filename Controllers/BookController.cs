@@ -12,14 +12,24 @@ namespace BookManagementAPI.Controllers
         private readonly BookDbContext _context = context;
 
         [HttpGet]
-        public async Task<ActionResult<List<Book>>> GetBooks()
+        public async Task<ActionResult<List<BookDto>>> GetBooks()
         {
-            return Ok(await _context.Books.ToListAsync());
+            var books = await _context.Books.ToListAsync();
+
+            List<BookDto> booksDto = books.Select(b => new BookDto
+            {
+                Title = b.Title,
+                Author = b.Author,
+                PublicationYear = b.PublicationYear,
+                BookViews = b.BookViews
+            }).ToList();
+
+            return Ok(booksDto.OrderByDescending(b => b.PopularityScore).Select(b => b.Title));
         }
 
         [HttpGet]
         [Route("{id}")]
-        public async Task<ActionResult<Book>> GetBookById(int id)
+        public async Task<ActionResult<BookDto>> GetBookById(int id)
         {
             var book = await _context.Books.FindAsync(id);
             if (book is null)
@@ -28,11 +38,20 @@ namespace BookManagementAPI.Controllers
             book.BookViews++;
             await _context.SaveChangesAsync();
 
-            return Ok(book);
+            BookDto bookDto = new BookDto
+            {
+                Id = book.Id,
+                Title = book.Title,
+                Author = book.Author,
+                PublicationYear = book.PublicationYear,
+                BookViews = book.BookViews
+            };
+
+            return Ok(bookDto);
         }
 
         [HttpPost]
-        public async Task<ActionResult<Book>> AddBook(Book newBook)
+        public async Task<ActionResult<CreateBookDto>> AddBook(CreateBookDto newBook)
         {
             if (newBook is null)
                 return BadRequest();
@@ -41,14 +60,47 @@ namespace BookManagementAPI.Controllers
             if (checkForexistingBook is not null)
                 return BadRequest(checkForexistingBook.Title);
 
-            _context.Books.Add(newBook);
+            var book = new Book
+            {
+                Title = newBook.Title,
+                Author = newBook.Author,
+                PublicationYear = newBook.PublicationYear
+            };
+
+            _context.Books.Add(book);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetBookById), new { id = newBook.Id }, newBook);
+            return CreatedAtAction(nameof(GetBookById), new { id = book.Id }, book);
+        }
+
+        [HttpPost("addBulk")]
+        public async Task<ActionResult<List<CreateBookDto>>> AddBooks(List<CreateBookDto> newBooks)
+        {
+            if (!newBooks.Any())
+                return BadRequest();
+
+            foreach (var book in newBooks)
+            {
+                var checkForexistingBook = await _context.Books.FirstOrDefaultAsync(b => b.Title == book.Title);
+                if (checkForexistingBook is null)
+                {
+                    var newBook = new Book
+                    {
+                        Title = book.Title,
+                        Author = book.Author,
+                        PublicationYear = book.PublicationYear
+                    };
+                    _context.Books.Add(newBook);
+                }
+                else
+                    continue;
+            }
+            await _context.SaveChangesAsync();
+            return CreatedAtAction(nameof(GetBooks), newBooks);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateBook(int id, Book updatedBook)
+        public async Task<IActionResult> UpdateBook(int id, UpdateBookDto updatedBook)
         {
             var book = await _context.Books.FindAsync(id);
             if (book is null)
@@ -60,8 +112,7 @@ namespace BookManagementAPI.Controllers
 
             await _context.SaveChangesAsync();
 
-            return NoContent();
-
+            return Ok();
         }
 
         [HttpDelete("{id}")]
@@ -74,6 +125,24 @@ namespace BookManagementAPI.Controllers
             _context.Books.Remove(book);
             await _context.SaveChangesAsync();
 
+            return Ok();
+        }
+
+        [HttpDelete("deleteBulk")]
+        public async Task<IActionResult> DeleteBooks(List<int> ids)
+        {
+            if (!ids.Any())
+                return BadRequest();
+
+            foreach (int id in ids)
+            {
+                var book = await _context.Books.FindAsync(id);
+                if (book is null)
+                    return NotFound(id);
+
+                _context.Books.Remove(book);
+            }
+            await _context.SaveChangesAsync();
             return Ok();
         }
     }
